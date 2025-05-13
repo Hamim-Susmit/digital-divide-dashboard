@@ -1,0 +1,564 @@
+// This is a modification guide for your existing map.js file
+// I'll show you the sections to add and where they should go 
+
+// ============= RADAR CHART INTEGRATION GUIDE =============
+
+// 1. ADD THESE VARIABLES AFTER YOUR EXISTING VARIABLES (around line 20)
+// Regional data grouping for radar chart
+const regions = {
+  "Northeast": ["CT", "ME", "MA", "NH", "RI", "VT", "NJ", "NY", "PA"],
+  "Midwest": ["IL", "IN", "MI", "OH", "WI", "IA", "KS", "MN", "MO", "NE", "ND", "SD"],
+  "South": ["DE", "FL", "GA", "MD", "NC", "SC", "VA", "WV", "AL", "KY", "MS", "TN", "AR", "LA", "OK", "TX"],
+  "West": ["AZ", "CO", "ID", "MT", "NV", "NM", "UT", "WY", "AK", "CA", "HI", "OR", "WA"]
+};
+
+const regionColors = {
+  "Northeast": "#4E79A7",
+  "Midwest": "#F28E2B", 
+  "South": "#E15759",
+  "West": "#76B7B2"
+};
+
+// 2. ADD THIS FUNCTION TO CREATE THE RADAR CHART CONTAINER
+// Add this after the existing declaration of `chartContainer`
+function createRadarChartContainer() {
+  // Create radar chart container
+  const radarContainer = d3.select("body")
+    .append("div")
+    .attr("id", "radar-chart")
+    .style("margin-top", "20px")
+    .style("width", "100%")
+    .style("max-width", "600px")
+    .style("margin-left", "auto")
+    .style("margin-right", "auto");
+  
+  // Add title
+  radarContainer.append("h3")
+    .style("text-align", "center")
+    .style("margin-bottom", "10px")
+    .text("Digital Divide Metrics by U.S. Region");
+  
+  // Create SVG for radar chart
+  const radarSvg = radarContainer.append("svg")
+    .attr("width", 600)
+    .attr("height", 500)
+    .append("g")
+    .attr("transform", "translate(300,250)"); // Center the radar chart
+  
+  return { radarContainer, radarSvg };
+}
+
+// 3. ADD THIS FUNCTION TO PROCESS REGIONAL DATA
+// Add this function after the existing processing functions
+function calculateRegionalData(data, fipsMap) {
+  const regionalData = {};
+  
+  // Initialize regional containers
+  Object.keys(regions).forEach(region => {
+    regionalData[region] = {
+      "Broadband Access": 0,
+      "No Computer": 0,
+      "Smartphone Only": 0,
+      "No High School": 0,
+      "School-Age No Internet": 0,
+      count: 0
+    };
+  });
+  
+  // Aggregate data by region
+  data.forEach(row => {
+    Object.keys(regions).forEach(region => {
+      if (regions[region].includes(row.state_id)) {
+        regionalData[region]["Broadband Access"] += +row["% Households with Broadband"];
+        regionalData[region]["No Computer"] += +row["% Households Without Computer"];
+        regionalData[region]["Smartphone Only"] += +row["% Smartphone-Only Households"];
+        regionalData[region]["No High School"] += +row["% Without High School Diploma"];
+        regionalData[region]["School-Age No Internet"] += +row["% School-Age (5–17) No Internet"];
+        regionalData[region].count++;
+      }
+    });
+  });
+  
+  // Calculate averages
+  Object.keys(regionalData).forEach(region => {
+    const count = regionalData[region].count;
+    if (count > 0) {
+      Object.keys(regionalData[region]).forEach(metric => {
+        if (metric !== "count") {
+          regionalData[region][metric] /= count;
+        }
+      });
+    }
+  });
+  
+  return regionalData;
+}
+
+// 4. ADD THIS FUNCTION TO CREATE RADAR CHART
+function drawRadarChart(radarSvg, regionalData) {
+  // Define radar chart features
+  const features = [
+    "Broadband Access",
+    "No Computer",
+    "Smartphone Only",
+    "No High School",
+    "School-Age No Internet"
+  ];
+  
+  // Set up radar chart parameters
+  const radius = 200;
+  
+  // Create scales
+  const angleScale = d3.scalePoint()
+    .domain(features)
+    .range([0, 2 * Math.PI]);
+  
+  const radialScale = d3.scaleLinear()
+    .domain([0, 100])
+    .range([0, radius]);
+  
+  // Create circular grid lines
+  const ticks = [20, 40, 60, 80, 100];
+  
+  // Add circular grid
+  radarSvg.selectAll(".circular-grid")
+    .data(ticks)
+    .join("circle")
+      .attr("class", "circular-grid")
+      .attr("cx", 0)
+      .attr("cy", 0)
+      .attr("r", d => radialScale(d))
+      .attr("fill", "none")
+      .attr("stroke", "#ddd")
+      .attr("stroke-dasharray", "4,4");
+  
+  // Add radial axes
+  const axes = radarSvg.selectAll(".axis")
+    .data(features)
+    .join("g")
+      .attr("class", "axis");
+  
+  axes.append("line")
+    .attr("x1", 0)
+    .attr("y1", 0)
+    .attr("x2", (d, i) => radialScale(100) * Math.cos(angleScale(d) - Math.PI/2))
+    .attr("y2", (d, i) => radialScale(100) * Math.sin(angleScale(d) - Math.PI/2))
+    .attr("stroke", "#999")
+    .attr("stroke-width", 1.5);
+  
+  // Add axis labels
+  axes.append("text")
+    .attr("x", (d, i) => radialScale(110) * Math.cos(angleScale(d) - Math.PI/2))
+    .attr("y", (d, i) => radialScale(110) * Math.sin(angleScale(d) - Math.PI/2))
+    .attr("text-anchor", (d, i) => {
+      const angle = angleScale(d);
+      if (Math.abs(angle - Math.PI/2) < 0.1 || Math.abs(angle - 3*Math.PI/2) < 0.1) return "middle";
+      return angle < Math.PI ? "start" : "end";
+    })
+    .attr("dominant-baseline", (d, i) => {
+      const angle = angleScale(d);
+      if (Math.abs(angle - 0) < 0.1 || Math.abs(angle - Math.PI) < 0.1) return "middle";
+      return angle < Math.PI/2 || angle > 3*Math.PI/2 ? "hanging" : "auto";
+    })
+    .attr("dy", (d, i) => {
+      const angle = angleScale(d);
+      if (Math.abs(angle - Math.PI/2) < 0.1) return "-0.5em";
+      return "0.35em";
+    })
+    .style("font-size", "12px")
+    .style("fill", "#555")
+    .text(d => d);
+  
+  // Add tick labels
+  radarSvg.selectAll(".radial-tick-label")
+    .data(ticks)
+    .join("text")
+      .attr("class", "radial-tick-label")
+      .attr("x", 5)
+      .attr("y", d => -radialScale(d))
+      .style("font-size", "10px")
+      .style("text-anchor", "start")
+      .text(d => d);
+  
+  // Create a line generator for the radar paths
+  const radarLine = d3.lineRadial()
+    .radius(d => d.value)
+    .angle(d => d.angle)
+    .curve(d3.curveLinearClosed);
+  
+  // Transform regionalData for the radar chart and draw paths
+  Object.keys(regionalData).forEach(region => {
+    // For metrics where lower is better, invert the values
+    // (No Computer, Smartphone Only, No High School, School-Age No Internet)
+    const inversions = {
+      "No Computer": true,
+      "Smartphone Only": true,
+      "No High School": true,
+      "School-Age No Internet": true
+    };
+    
+    // Create radar data points
+    const radarData = features.map(feature => {
+      let value = regionalData[region][feature];
+      
+      // For inverted metrics, transform to ensure higher values are better
+      if (inversions[feature]) {
+        // Scale between 0-100 where 0% is 100 (best) and 20%+ is 0 (worst)
+        value = Math.max(0, 100 - (value * 5));
+      }
+      
+      return {
+        angle: angleScale(feature),
+        value: radialScale(value)
+      };
+    });
+    
+    // Draw radar path
+    radarSvg.append("path")
+      .attr("class", `radar-path-${region}`)
+      .attr("d", radarLine(radarData))
+      .attr("fill", regionColors[region])
+      .attr("fill-opacity", 0.2)
+      .attr("stroke", regionColors[region])
+      .attr("stroke-width", 2);
+  });
+  
+  // Add legend
+  const legend = radarSvg.append("g")
+    .attr("class", "legend")
+    .attr("transform", "translate(180, -200)");
+  
+  Object.keys(regions).forEach((region, i) => {
+    const legendItem = legend.append("g")
+      .attr("transform", `translate(0, ${i * 20})`);
+    
+    legendItem.append("rect")
+      .attr("width", 12)
+      .attr("height", 12)
+      .attr("fill", regionColors[region]);
+    
+    legendItem.append("text")
+      .attr("x", 20)
+      .attr("y", 10)
+      .text(region)
+      .style("font-size", "12px");
+  });
+  
+  // Add explainer note
+  d3.select("#radar-chart")
+    .append("div")
+    .style("text-align", "center")
+    .style("font-style", "italic")
+    .style("font-size", "12px")
+    .style("margin-top", "10px")
+    .text("Note: For 'No Computer', 'Smartphone Only', 'No High School', and 'School-Age No Internet', values have been inverted so that higher values represent better outcomes.");
+}
+
+// 5. ADD THIS CODE TO INTEGRATE WITH YOUR EXISTING PROMISE.ALL SECTION
+// Modify your existing Promise.all section - look for this part in your code around line 40-50:
+
+/* Original code:
+Promise.all([
+  d3.json("/static/states-albers-10m.json"),
+  d3.csv("/static/D_T_with_state_id.csv")
+]).then(([topoData, csvData]) => {
+  // Your existing code...
+});
+*/
+
+// Modify to create and populate the radar chart:
+Promise.all([
+  d3.json("/static/states-albers-10m.json"),
+  d3.csv("/static/D_T_with_state_id.csv")
+]).then(([topoData, csvData]) => {
+  // Your existing fipsMap, dataByFips code...
+
+  // Create radar chart container
+  const { radarContainer, radarSvg } = createRadarChartContainer();
+  
+  // Calculate regional data
+  const regionalData = calculateRegionalData(csvData, fipsMap);
+  
+  // Draw radar chart
+  drawRadarChart(radarSvg, regionalData);
+  
+  // Continue with your existing code for filters, map updates, etc.
+  // ...
+});
+
+// 6. ADD CSS STYLES
+// Add these CSS styles to your existing style.css file or include them inline
+/*
+#radar-chart {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+  margin: 20px auto;
+}
+
+.axis line {
+  stroke: #ddd;
+}
+
+.radar-path {
+  transition: opacity 0.3s;
+}
+*/
+
+// Continued from previous code...
+
+        const stateData = dataByFips.get(d.id);
+        console.log("Selected state data:", stateData); // Debug
+        drawBarChart(stateData);
+      })
+      .merge(paths)
+      .transition()
+      .duration(1000)
+      .attr("fill", d => {
+        const val = dataByFips.get(d.id);
+        return val ? color(+val[currentMetric]) : "#ccc";
+      });
+
+    paths.exit().remove();
+    drawLegend();
+  }
+
+  function drawLegend() {
+    const legendWidth = 300;
+    const legendHeight = 10;
+    const [min, max] = color.domain();
+
+    const canvas = document.createElement("canvas");
+    canvas.width = legendWidth;
+    canvas.height = legendHeight;
+    const context = canvas.getContext("2d");
+
+    for (let i = 0; i < legendWidth; ++i) {
+      context.fillStyle = color(min + (max - min) * i / legendWidth);
+      context.fillRect(i, 0, 1, legendHeight);
+    }
+
+    legendContainer.html("");
+    legendContainer.append(() => canvas);
+    legendContainer.append("div")
+      .style("display", "flex")
+      .style("justify-content", "space-between")
+      .style("width", `${legendWidth}px`)
+      .html(`<span>${min.toFixed(2)}</span><span>${max.toFixed(2)}</span>`);
+  }
+
+  function drawBarChart(stateData) {
+    chartContainer.html(""); // Clear previous chart
+    if (!stateData) return;
+
+    // Log the metrics to see what we're working with
+    console.log("Metrics for bar chart:", metrics);
+    
+    // Calculate how many metrics we need to display
+    const numMetrics = metrics.length;
+    console.log(`Number of metrics: ${numMetrics}`);
+
+    // Calculate appropriate chart dimensions based on the number of metrics
+    const barWidth = 1000;
+    const rowHeight = 40; // Height per metric row
+    const barHeight = Math.max(500, numMetrics * rowHeight + 150); // Ensure minimum height
+    const margin = { 
+      top: 60, 
+      right: 150, // Increased for value labels
+      bottom: 100, 
+      left: 350  // Significantly increased for longer metric names
+    };
+
+    // Add title
+    const chartTitle = chartContainer.append("h3")
+      .text(`Metrics for ${stateData.State}`)
+      .style("text-align", "center")
+      .style("margin-bottom", "20px");
+      
+    // Create SVG for chart with calculated dimensions
+    const svgChart = chartContainer.append("svg")
+      .attr("width", barWidth)
+      .attr("height", barHeight);
+
+    // Create normalized versions of metrics for display
+    // Scale down "Median Household Income" to be comparable with percentage values
+    const chartMetrics = metrics
+      .map(m => {
+        const value = +stateData[m];
+        let normalizedValue = value;
+        
+        // If this is Median Household Income, scale it down to be comparable with percentages
+        if (m === "Median Household Income") {
+          normalizedValue = value / 1000; // Scale down by 1000
+        }
+        
+        return {
+          name: m,
+          value: isNaN(value) ? 0 : value, // Original value
+          normalizedValue: isNaN(normalizedValue) ? 0 : normalizedValue, // Scaled value for display
+          displayValue: stateData[m], // Original display value
+          isIncome: m === "Median Household Income" // Flag for special handling
+        };
+      });
+    
+    console.log(`Processed ${chartMetrics.length} metrics for chart`);
+    
+    // Create a secondary array to handle scaled numeric values
+    const normalizedMetrics = chartMetrics.map(d => ({
+      ...d,
+      // Use the normalized value for chart rendering but keep original for labels
+      chartValue: d.isIncome ? d.normalizedValue : d.value 
+    }));
+    
+    // Set up scales using the normalized values
+    const maxValue = d3.max(normalizedMetrics, d => d.chartValue) * 1.1; // Add 10% padding
+    
+    const x = d3.scaleLinear()
+      .domain([0, maxValue])
+      .range([margin.left, barWidth - margin.right]);
+
+    const y = d3.scaleBand()
+      .domain(chartMetrics.map(d => d.name))
+      .range([margin.top, barHeight - margin.bottom])
+      .padding(0.2);
+
+    // Add X axis with better formatting
+    svgChart.append("g")
+      .attr("transform", `translate(0,${barHeight - margin.bottom})`)
+      .call(d3.axisBottom(x).ticks(10))
+      .selectAll("text")
+      .style("text-anchor", "end")
+      .attr("transform", "rotate(-45)")
+      .attr("dx", "-.8em")
+      .attr("dy", ".15em");
+
+    // Add Y axis with better formatting
+    const yAxis = svgChart.append("g")
+      .attr("transform", `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y));
+    
+    // Better formatting for Y axis labels
+    yAxis.selectAll("text")
+      .style("font-size", "12px")
+      .call(wrapText, margin.left - 10);
+    
+    // Add bars using normalized values for the width
+    svgChart.selectAll(".bar")
+      .data(normalizedMetrics)
+      .join("rect")
+      .attr("class", "bar")
+      .attr("x", margin.left)
+      .attr("y", d => y(d.name))
+      .attr("width", d => x(d.chartValue) - margin.left)
+      .attr("height", y.bandwidth())
+      .attr("fill", d => d.name === currentMetric ? "orange" : "steelblue")
+      .on("mouseover", (event, d) => {
+        let tooltipText = `<strong>${d.name}:</strong> ${d.displayValue}`;
+        
+        // Add a note about scaling for income
+        if (d.isIncome) {
+          tooltipText += "<br><em>(scaled down in chart for better comparison)</em>";
+        }
+        
+        tooltip.style("display", "block")
+          .style("left", `${event.pageX + 10}px`)
+          .style("top", `${event.pageY + 10}px`)
+          .html(tooltipText);
+      })
+      .on("mouseout", () => tooltip.style("display", "none"));
+
+    // Add value labels to the bars
+    svgChart.selectAll(".value-label")
+      .data(normalizedMetrics)
+      .join("text")
+      .attr("class", "value-label")
+      .attr("x", d => x(d.chartValue) + 5)
+      .attr("y", d => y(d.name) + y.bandwidth() / 2 + 5)
+      .text(d => {
+        // For income, format the label to make it clear it's in thousands
+        if (d.isIncome) {
+          const formattedVal = d3.format(",.0f")(d.value);
+          return `${formattedVal}`; 
+        }
+        return d.displayValue;
+      })
+      .attr("font-size", "12px")
+      .attr("fill", "black");
+
+    // Add chart title
+    svgChart.append("text")
+      .attr("x", barWidth / 2)
+      .attr("y", 30)
+      .attr("text-anchor", "middle")
+      .style("font-size", "18px")
+      .style("font-weight", "bold")
+      .text(`Data for ${stateData.State}`);
+      
+    // Add a note about scaling for the income metric
+    svgChart.append("text")
+      .attr("x", barWidth / 2)
+      .attr("y", 50)
+      .attr("text-anchor", "middle")
+      .style("font-size", "12px")
+      .style("font-style", "italic")
+      .text("Note: Median Household Income is scaled down for better visualization");
+
+    // Add click handler for the bars
+    svgChart.selectAll(".bar").on("click", function(event, d) {
+      // Update the dropdown to the clicked metric
+      metricDropdown.property("value", d.name);
+      // Update the current metric
+      currentMetric = d.name;
+      // Update the map to reflect the new metric
+      updateMap();
+      // Redraw the bar chart to highlight the selected metric
+      drawBarChart(stateData);
+    });
+
+    // Helper function to wrap long text labels
+    function wrapText(selection, width) {
+      selection.each(function() {
+        const text = d3.select(this);
+        const words = text.text().split(/\s+/).reverse();
+        let word;
+        let line = [];
+        let lineNumber = 0;
+        const lineHeight = 1.1; // ems
+        const y = text.attr("y");
+        const dy = parseFloat(text.attr("dy")) || 0;
+        let tspan = text.text(null).append("tspan")
+          .attr("x", -10)
+          .attr("y", y)
+          .attr("dy", dy + "em");
+        
+        while (word = words.pop()) {
+          line.push(word);
+          tspan.text(line.join(" "));
+          if (tspan.node().getComputedTextLength() > width) {
+            line.pop();
+            tspan.text(line.join(" "));
+            line = [word];
+            tspan = text.append("tspan")
+              .attr("x", -10)
+              .attr("y", y)
+              .attr("dy", ++lineNumber * lineHeight + dy + "em")
+              .text(word);
+          }
+        }
+      });
+    }
+  }
+
+  // Create and integrate radar chart
+  const { radarContainer, radarSvg } = createRadarChartContainer();
+  
+  // Calculate regional data for radar chart
+  const regionalData = calculateRegionalData(csvData);
+  
+  // Draw radar chart
+  drawRadarChart(radarSvg, regionalData);
+
+  // Initialize the map
+  updateMap();
+});

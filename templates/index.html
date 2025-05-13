@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>US Choropleth Map - Modular Version</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/custom.css">
+  <!-- D3 & TopoJSON -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/topojson-client@3"></script>
+  
+  <!-- Components -->
+  <script src="/static/map.js"></script>
+  <script src="/static/barchart.js"></script>
+  <script src="/static/comparison-chart.js"></script>
+  <script src="/static/parallel-coordinates.js"></script>
+  <script src="/static/main.js"></script>
+</head>
+<body>
+  <h2>Interactive US Choropleth Map with Multi-State Comparison</h2>
+  
+  <div class="instructions">
+    <h4>How to use:</h4>
+    <ul>
+      <li>Click "Toggle Selection Mode" to enable multi-state selection</li>
+      <li>In selection mode, click on states individually or use the brush tool by clicking and dragging</li>
+      <li>Selected states will be highlighted with an orange-red border</li>
+      <li>Select two or more states to see detailed comparison visualizations</li>
+      <li>Use the parallel coordinates plot to compare multiple metrics at once</li>
+      <li>Drag metrics in the parallel coordinates to reorder them</li>
+      <li>Click metrics to toggle their visibility in the plot</li>
+      <li>Click "Clear Selection" to reset your selection</li>
+    </ul>
+  </div>
+
+  <label for="metric">Choose a Metric:</label>
+  <select id="metric"></select>
+
+  <div id="legend"></div>
+
+  <!-- SVG Container -->
+  <svg id="map-svg" width="960" height="600"></svg>
+
+  <!-- Tooltip -->
+  <div class="tooltip"></div>
+
+  <!-- Bar Chart Container (for single state) -->
+  <div id="barchart"></div>
+  
+  <!-- Comparison Chart Container (for multiple states) -->
+  <div id="comparison-chart"></div>
+  
+  <!-- Parallel Coordinates Plot (for multiple states) -->
+  <div id="parallel-coordinates"></div>
+</body>
+</html>
